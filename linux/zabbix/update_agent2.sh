@@ -9,9 +9,15 @@ source "$ROOT_DIR/linux/common/functions.sh"
 
 ZBX_MAJOR="6.4"
 CONFIGURE_ONLY=0
+ZBX_SERVER="${ZBX_SERVER:-172.31.254.101}"
+ZBX_SERVER_ACTIVE="${ZBX_SERVER_ACTIVE:-$ZBX_SERVER}"
+ZBX_HOSTNAME=""
+ZBX_HOSTNAME_ITEM="system.hostname"
+ZBX_TIMEOUT="30"
 ZBX_CONF="/etc/zabbix/zabbix_agent2.conf"
 ZBX_CONF_DIR="/etc/zabbix/zabbix_agent2.d"
-KAT_CONF="$ZBX_CONF_DIR/karelia-admin-toolkit.conf"
+KAT_BASE_CONF="$ZBX_CONF_DIR/00-karelia-base.conf"
+KAT_USERPARAM_CONF="$ZBX_CONF_DIR/10-karelia-userparameters.conf"
 
 usage() {
     cat <<USAGE
@@ -21,16 +27,26 @@ Usage:
   sudo update_agent2.sh [options]
 
 Options:
-  --major VERSION    Zabbix major version. Default: 6.4
-  --configure-only   Only install Karelia UserParameters and restart agent
-  --dry-run          Show actions without changing system
-  -h, --help         Show help
+  --major VERSION         Zabbix major version. Default: 6.4
+  --server IP_OR_DNS      Zabbix Server. Default: 172.31.254.101
+  --server-active VALUE   Zabbix ServerActive. Default: same as --server
+  --hostname NAME         Static Hostname. If omitted, HostnameItem is used
+  --hostname-item KEY     HostnameItem. Default: system.hostname
+  --timeout SECONDS       Agent timeout. Default: 30
+  --configure-only        Only configure Agent2 and restart service
+  --dry-run               Show actions without changing system
+  -h, --help              Show help
 USAGE
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --major) ZBX_MAJOR="${2:-}"; shift 2 ;;
+        --server) ZBX_SERVER="${2:-}"; ZBX_SERVER_ACTIVE="${ZBX_SERVER_ACTIVE:-${2:-}}"; shift 2 ;;
+        --server-active) ZBX_SERVER_ACTIVE="${2:-}"; shift 2 ;;
+        --hostname) ZBX_HOSTNAME="${2:-}"; shift 2 ;;
+        --hostname-item) ZBX_HOSTNAME_ITEM="${2:-}"; shift 2 ;;
+        --timeout) ZBX_TIMEOUT="${2:-}"; shift 2 ;;
         --configure-only) CONFIGURE_ONLY=1; shift ;;
         --dry-run) KAT_DRY_RUN=1; shift ;;
         -h|--help) usage; exit 0 ;;
@@ -38,15 +54,37 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+write_base_config() {
+    kat_run mkdir -p "$ZBX_CONF_DIR"
+
+    if [[ "$KAT_DRY_RUN" == "1" ]]; then
+        kat_info "DRY-RUN: write $KAT_BASE_CONF"
+        kat_info "DRY-RUN: Server=$ZBX_SERVER ServerActive=$ZBX_SERVER_ACTIVE Timeout=$ZBX_TIMEOUT"
+        return 0
+    fi
+
+    {
+        echo "# Managed by Karelia Admin Toolkit"
+        echo "Server=$ZBX_SERVER"
+        echo "ServerActive=$ZBX_SERVER_ACTIVE"
+        if [[ -n "$ZBX_HOSTNAME" ]]; then
+            echo "Hostname=$ZBX_HOSTNAME"
+        else
+            echo "HostnameItem=$ZBX_HOSTNAME_ITEM"
+        fi
+        echo "Timeout=$ZBX_TIMEOUT"
+    } > "$KAT_BASE_CONF"
+}
+
 write_userparameters() {
     kat_run mkdir -p "$ZBX_CONF_DIR"
 
     if [[ "$KAT_DRY_RUN" == "1" ]]; then
-        kat_info "DRY-RUN: write $KAT_CONF"
+        kat_info "DRY-RUN: write $KAT_USERPARAM_CONF"
         return 0
     fi
 
-    cat > "$KAT_CONF" <<'EOF'
+    cat > "$KAT_USERPARAM_CONF" <<'EOF'
 # Managed by Karelia Admin Toolkit
 UserParameter=service.zabbix_agent2.status,systemctl is-active zabbix-agent2 2>/dev/null || echo inactive
 UserParameter=copyfail.kernel.running,uname -r
@@ -133,6 +171,7 @@ main() {
 
     kat_info "Karelia Admin Toolkit: Zabbix Agent2"
     kat_info "Target Zabbix major: $ZBX_MAJOR"
+    kat_info "Zabbix server: $ZBX_SERVER"
 
     kat_backup_path "$ZBX_CONF"
     kat_backup_path "$ZBX_CONF_DIR"
@@ -143,6 +182,7 @@ main() {
         kat_info "Configure-only mode: package update skipped"
     fi
 
+    write_base_config
     write_userparameters
     ensure_include
     restart_and_test
