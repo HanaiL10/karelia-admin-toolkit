@@ -34,19 +34,25 @@ pkg_version() {
 }
 
 service_state() {
-    if command -v systemctl >/dev/null 2>&1; then
-        systemctl is-active zabbix-agent2 2>/dev/null || echo unknown
-    else
+    if ! command -v systemctl >/dev/null 2>&1; then
         echo unknown
+        return 0
     fi
+
+    local state
+    state="$(systemctl is-active zabbix-agent2 2>/dev/null || true)"
+    echo "${state:-unknown}"
 }
 
 service_enabled() {
-    if command -v systemctl >/dev/null 2>&1; then
-        systemctl is-enabled zabbix-agent2 2>/dev/null || echo unknown
-    else
+    if ! command -v systemctl >/dev/null 2>&1; then
         echo unknown
+        return 0
     fi
+
+    local state
+    state="$(systemctl is-enabled zabbix-agent2 2>/dev/null || true)"
+    echo "${state:-unknown}"
 }
 
 check_key() {
