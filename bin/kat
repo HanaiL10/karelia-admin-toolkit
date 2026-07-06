@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Karelia Admin Toolkit main CLI
 
 set -Eeuo pipefail
 
@@ -17,25 +16,39 @@ show_help() {
 Karelia Admin Toolkit $KAT_VERSION
 
 Usage:
-  kat <command> [options]
+  kat <group> <target> [options]
   kat menu
 
-Commands:
+Groups:
+  update               Update installed components
+  configure            Configure installed components
+  test                 Test checks and UserParameters
+  inventory            Show basic host inventory
+  cleanup              Linux cleanup helpers
   menu                 Interactive menu
-  zabbix-update        Update Zabbix Agent2
-  zabbix-test          Test Zabbix Agent2 keys
   version              Show version
   help                 Show help
 
+Targets:
+  zabbix-agent2        Zabbix Agent2 module
+
 Examples:
+  sudo kat update zabbix-agent2 --major 6.4 --dry-run
+  sudo kat configure zabbix-agent2
+  kat test zabbix-agent2
+
+Compatibility:
   sudo kat zabbix-update --major 6.4 --dry-run
-  sudo kat zabbix-update --major 6.4
   kat zabbix-test
 USAGE
 }
 
 run_zabbix_update() {
     exec "$KAT_ROOT/linux/zabbix/update_agent2.sh" "$@"
+}
+
+run_zabbix_configure() {
+    exec "$KAT_ROOT/linux/zabbix/update_agent2.sh" --configure-only "$@"
 }
 
 run_zabbix_test() {
@@ -58,6 +71,17 @@ run_zabbix_test() {
     done
 }
 
+show_inventory() {
+    echo "Hostname : $(hostname -f 2>/dev/null || hostname)"
+    if [[ -r /etc/os-release ]]; then
+        . /etc/os-release
+        echo "OS       : ${PRETTY_NAME:-unknown}"
+    fi
+    echo "Kernel   : $(uname -r)"
+    echo "Arch     : $(uname -m)"
+    echo "Uptime   : $(uptime -p 2>/dev/null || uptime)"
+}
+
 show_menu() {
     while true; do
         cat <<MENU
@@ -65,25 +89,67 @@ show_menu() {
 Karelia Admin Toolkit $KAT_VERSION
 
 1. Update Zabbix Agent2
-2. Test Zabbix Agent2 keys
-3. Show version
-4. Exit
+2. Configure Zabbix Agent2 UserParameters
+3. Test Zabbix Agent2 keys
+4. Inventory
+5. Show version
+6. Exit
 MENU
         read -r -p "Select: " choice
         case "$choice" in
             1) run_zabbix_update ;;
-            2) run_zabbix_test ;;
-            3) echo "$KAT_VERSION" ;;
-            4) exit 0 ;;
+            2) run_zabbix_configure ;;
+            3) run_zabbix_test ;;
+            4) show_inventory ;;
+            5) echo "$KAT_VERSION" ;;
+            6) exit 0 ;;
             *) echo "Unknown option" ;;
         esac
     done
+}
+
+require_target() {
+    local target="${1:-}"
+    if [[ -z "$target" ]]; then
+        echo "ERROR: target required" >&2
+        show_help
+        exit 1
+    fi
 }
 
 cmd="${1:-help}"
 shift || true
 
 case "$cmd" in
+    update)
+        target="${1:-}"
+        require_target "$target"
+        shift || true
+        case "$target" in
+            zabbix-agent2) run_zabbix_update "$@" ;;
+            *) echo "Unknown update target: $target" >&2; exit 1 ;;
+        esac
+        ;;
+    configure)
+        target="${1:-}"
+        require_target "$target"
+        shift || true
+        case "$target" in
+            zabbix-agent2) run_zabbix_configure "$@" ;;
+            *) echo "Unknown configure target: $target" >&2; exit 1 ;;
+        esac
+        ;;
+    test)
+        target="${1:-}"
+        require_target "$target"
+        shift || true
+        case "$target" in
+            zabbix-agent2) run_zabbix_test ;;
+            *) echo "Unknown test target: $target" >&2; exit 1 ;;
+        esac
+        ;;
+    inventory) show_inventory ;;
+    cleanup) echo "cleanup module is not implemented yet" ;;
     menu) show_menu ;;
     zabbix-update) run_zabbix_update "$@" ;;
     zabbix-test) run_zabbix_test ;;
