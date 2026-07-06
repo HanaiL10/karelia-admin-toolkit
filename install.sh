@@ -47,8 +47,8 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 run mkdir -p "$INSTALL_DIR" "$BIN_DIR"
-run cp -a "$SCRIPT_DIR/bin" "$SCRIPT_DIR/linux" "$SCRIPT_DIR/docs" "$SCRIPT_DIR/README.md" "$SCRIPT_DIR/VERSION" "$INSTALL_DIR/"
-run chmod +x "$INSTALL_DIR/bin/kat" "$INSTALL_DIR/linux/zabbix/update_agent2.sh"
+run cp -a "$SCRIPT_DIR/bin" "$SCRIPT_DIR/linux" "$SCRIPT_DIR/modules" "$SCRIPT_DIR/docs" "$SCRIPT_DIR/README.md" "$SCRIPT_DIR/VERSION" "$INSTALL_DIR/"
+run chmod +x "$INSTALL_DIR/bin/kat" "$INSTALL_DIR/linux/zabbix/update_agent2.sh" "$INSTALL_DIR/modules/zabbix-agent2/status.sh"
 run ln -sfn "$INSTALL_DIR/bin/kat" "$BIN_DIR/kat"
 run ln -sfn "$INSTALL_DIR/linux/zabbix/update_agent2.sh" "$BIN_DIR/kat-zabbix-agent2-update"
 
@@ -56,4 +56,5 @@ echo "Installed to: $INSTALL_DIR"
 echo "Commands:"
 echo "  kat --help"
 echo "  kat menu"
-echo "  kat zabbix-update --major 6.4 --dry-run"
+echo "  kat status zabbix-agent2"
+echo "  kat update zabbix-agent2 --major 6.4 --dry-run"
