@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# Karelia Admin Toolkit main CLI
+
+set -Eeuo pipefail
+
+KAT_ROOT="${KAT_ROOT:-/opt/karelia-admin-toolkit}"
+VERSION_FILE="$KAT_ROOT/VERSION"
+
+if [[ -f "$VERSION_FILE" ]]; then
+    KAT_VERSION="$(cat "$VERSION_FILE")"
+else
+    KAT_VERSION="dev"
+fi
+
+show_help() {
+    cat <<USAGE
+Karelia Admin Toolkit $KAT_VERSION
+
+Usage:
+  kat <command> [options]
+  kat menu
+
+Commands:
+  menu                 Interactive menu
+  zabbix-update        Update Zabbix Agent2
+  zabbix-test          Test Zabbix Agent2 keys
+  version              Show version
+  help                 Show help
+
+Examples:
+  sudo kat zabbix-update --major 6.4 --dry-run
+  sudo kat zabbix-update --major 6.4
+  kat zabbix-test
+USAGE
+}
+
+run_zabbix_update() {
+    exec "$KAT_ROOT/linux/zabbix/update_agent2.sh" "$@"
+}
+
+run_zabbix_test() {
+    local keys=(
+        service.zabbix_agent2.status
+        copyfail.kernel.running
+        copyfail.algif_aead.loaded
+        copyfail.algif_aead.blocked
+        copyfail.reboot.required
+        copyfail.pkg.kernel
+    )
+
+    if ! command -v zabbix_agent2 >/dev/null 2>&1; then
+        echo "ERROR: zabbix_agent2 not found" >&2
+        exit 1
+    fi
+
+    for key in "${keys[@]}"; do
+        zabbix_agent2 -t "$key"
+    done
+}
+
+show_menu() {
+    while true; do
+        cat <<MENU
+
+Karelia Admin Toolkit $KAT_VERSION
+
+1. Update Zabbix Agent2
+2. Test Zabbix Agent2 keys
+3. Show version
+4. Exit
+MENU
+        read -r -p "Select: " choice
+        case "$choice" in
+            1) run_zabbix_update ;;
+            2) run_zabbix_test ;;
+            3) echo "$KAT_VERSION" ;;
+            4) exit 0 ;;
+            *) echo "Unknown option" ;;
+        esac
+    done
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+    menu) show_menu ;;
+    zabbix-update) run_zabbix_update "$@" ;;
+    zabbix-test) run_zabbix_test ;;
+    version|--version|-v) echo "$KAT_VERSION" ;;
+    help|--help|-h) show_help ;;
+    *) echo "Unknown command: $cmd" >&2; show_help; exit 1 ;;
+esac
