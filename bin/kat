@@ -17,15 +17,19 @@ Karelia Admin Toolkit $KAT_VERSION
 
 Usage:
   kat <action> <target> [options]
+  kat fleet plan zabbix-agent2 hosts.txt
   kat doctor
   kat inventory
   kat menu
 
 Actions:
+  install              Install component
   status               Show component status
   update               Update installed components
   configure            Configure installed components
   test                 Test checks and UserParameters
+  remove               Remove component, if implemented
+  fleet                Fleet operations
   doctor               Run host health checks
   inventory            Show basic host inventory
   cleanup              Linux cleanup helpers
@@ -39,9 +43,11 @@ Targets:
 Examples:
   kat doctor
   kat status zabbix-agent2
+  sudo kat install zabbix-agent2 --major 6.4
   sudo kat update zabbix-agent2 --major 6.4 --dry-run
   sudo kat configure zabbix-agent2
   kat test zabbix-agent2
+  kat fleet plan zabbix-agent2 hosts.txt
 
 Compatibility:
   sudo kat zabbix-update --major 6.4 --dry-run
@@ -77,6 +83,18 @@ run_doctor() {
 }
 
 run_zabbix_update() {
+    local module="$KAT_ROOT/modules/zabbix-agent2/update.sh"
+    if [[ -f "$module" ]]; then
+        exec bash "$module" "$@"
+    fi
+    exec "$KAT_ROOT/linux/zabbix/update_agent2.sh" "$@"
+}
+
+run_zabbix_install() {
+    local module="$KAT_ROOT/modules/zabbix-agent2/install.sh"
+    if [[ -f "$module" ]]; then
+        exec bash "$module" "$@"
+    fi
     exec "$KAT_ROOT/linux/zabbix/update_agent2.sh" "$@"
 }
 
@@ -109,6 +127,22 @@ run_zabbix_test() {
     done
 }
 
+run_fleet() {
+    local subcmd="${1:-}"
+    local target="${2:-}"
+    shift 2 || true
+
+    case "$subcmd:$target" in
+        plan:zabbix-agent2)
+            exec bash "$KAT_ROOT/modules/fleet/plan-zabbix-agent2.sh" "$@"
+            ;;
+        *)
+            echo "Usage: kat fleet plan zabbix-agent2 hosts.txt" >&2
+            exit 1
+            ;;
+    esac
+}
+
 show_inventory() {
     echo "Hostname : $(hostname -f 2>/dev/null || hostname)"
     if [[ -r /etc/os-release ]]; then
@@ -128,23 +162,25 @@ Karelia Admin Toolkit $KAT_VERSION
 
 1. Doctor
 2. Status Zabbix Agent2
-3. Update Zabbix Agent2
-4. Configure Zabbix Agent2 UserParameters
-5. Test Zabbix Agent2 keys
-6. Inventory
-7. Show version
-8. Exit
+3. Install Zabbix Agent2
+4. Update Zabbix Agent2
+5. Configure Zabbix Agent2 UserParameters
+6. Test Zabbix Agent2 keys
+7. Inventory
+8. Show version
+9. Exit
 MENU
         read -r -p "Select: " choice
         case "$choice" in
             1) run_doctor ;;
             2) run_module status zabbix-agent2 ;;
-            3) run_zabbix_update ;;
-            4) run_zabbix_configure ;;
-            5) run_zabbix_test ;;
-            6) show_inventory ;;
-            7) echo "$KAT_VERSION" ;;
-            8) exit 0 ;;
+            3) run_zabbix_install ;;
+            4) run_zabbix_update ;;
+            5) run_zabbix_configure ;;
+            6) run_zabbix_test ;;
+            7) show_inventory ;;
+            8) echo "$KAT_VERSION" ;;
+            9) exit 0 ;;
             *) echo "Unknown option" ;;
         esac
     done
@@ -163,17 +199,19 @@ cmd="${1:-help}"
 shift || true
 
 case "$cmd" in
-    status|update|configure|test)
+    install|status|update|configure|test|remove)
         target="${1:-}"
         require_target "$target"
         shift || true
         case "$cmd:$target" in
+            install:zabbix-agent2) run_zabbix_install "$@" ;;
             update:zabbix-agent2) run_zabbix_update "$@" ;;
             configure:zabbix-agent2) run_zabbix_configure "$@" ;;
             test:zabbix-agent2) run_zabbix_test "$@" ;;
             *) run_module "$cmd" "$target" "$@" ;;
         esac
         ;;
+    fleet) run_fleet "$@" ;;
     doctor) run_doctor "$@" ;;
     inventory) show_inventory ;;
     cleanup) echo "cleanup module is not implemented yet" ;;
