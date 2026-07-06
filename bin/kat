@@ -16,10 +16,12 @@ show_help() {
 Karelia Admin Toolkit $KAT_VERSION
 
 Usage:
-  kat <group> <target> [options]
+  kat <action> <target> [options]
+  kat inventory
   kat menu
 
-Groups:
+Actions:
+  status               Show component status
   update               Update installed components
   configure            Configure installed components
   test                 Test checks and UserParameters
@@ -33,6 +35,7 @@ Targets:
   zabbix-agent2        Zabbix Agent2 module
 
 Examples:
+  kat status zabbix-agent2
   sudo kat update zabbix-agent2 --major 6.4 --dry-run
   sudo kat configure zabbix-agent2
   kat test zabbix-agent2
@@ -41,6 +44,29 @@ Compatibility:
   sudo kat zabbix-update --major 6.4 --dry-run
   kat zabbix-test
 USAGE
+}
+
+module_path() {
+    local target="$1"
+    local action="$2"
+    echo "$KAT_ROOT/modules/$target/$action.sh"
+}
+
+run_module() {
+    local action="$1"
+    local target="$2"
+    shift 2 || true
+
+    local module
+    module="$(module_path "$target" "$action")"
+
+    if [[ ! -f "$module" ]]; then
+        echo "ERROR: module not found: $action $target" >&2
+        echo "Expected: $module" >&2
+        exit 1
+    fi
+
+    exec bash "$module" "$@"
 }
 
 run_zabbix_update() {
@@ -52,6 +78,11 @@ run_zabbix_configure() {
 }
 
 run_zabbix_test() {
+    local module="$KAT_ROOT/modules/zabbix-agent2/test.sh"
+    if [[ -f "$module" ]]; then
+        exec bash "$module"
+    fi
+
     local keys=(
         service.zabbix_agent2.status
         copyfail.kernel.running
@@ -88,21 +119,23 @@ show_menu() {
 
 Karelia Admin Toolkit $KAT_VERSION
 
-1. Update Zabbix Agent2
-2. Configure Zabbix Agent2 UserParameters
-3. Test Zabbix Agent2 keys
-4. Inventory
-5. Show version
-6. Exit
+1. Status Zabbix Agent2
+2. Update Zabbix Agent2
+3. Configure Zabbix Agent2 UserParameters
+4. Test Zabbix Agent2 keys
+5. Inventory
+6. Show version
+7. Exit
 MENU
         read -r -p "Select: " choice
         case "$choice" in
-            1) run_zabbix_update ;;
-            2) run_zabbix_configure ;;
-            3) run_zabbix_test ;;
-            4) show_inventory ;;
-            5) echo "$KAT_VERSION" ;;
-            6) exit 0 ;;
+            1) run_module status zabbix-agent2 ;;
+            2) run_zabbix_update ;;
+            3) run_zabbix_configure ;;
+            4) run_zabbix_test ;;
+            5) show_inventory ;;
+            6) echo "$KAT_VERSION" ;;
+            7) exit 0 ;;
             *) echo "Unknown option" ;;
         esac
     done
@@ -121,31 +154,15 @@ cmd="${1:-help}"
 shift || true
 
 case "$cmd" in
-    update)
+    status|update|configure|test)
         target="${1:-}"
         require_target "$target"
         shift || true
-        case "$target" in
-            zabbix-agent2) run_zabbix_update "$@" ;;
-            *) echo "Unknown update target: $target" >&2; exit 1 ;;
-        esac
-        ;;
-    configure)
-        target="${1:-}"
-        require_target "$target"
-        shift || true
-        case "$target" in
-            zabbix-agent2) run_zabbix_configure "$@" ;;
-            *) echo "Unknown configure target: $target" >&2; exit 1 ;;
-        esac
-        ;;
-    test)
-        target="${1:-}"
-        require_target "$target"
-        shift || true
-        case "$target" in
-            zabbix-agent2) run_zabbix_test ;;
-            *) echo "Unknown test target: $target" >&2; exit 1 ;;
+        case "$cmd:$target" in
+            update:zabbix-agent2) run_zabbix_update "$@" ;;
+            configure:zabbix-agent2) run_zabbix_configure "$@" ;;
+            test:zabbix-agent2) run_zabbix_test "$@" ;;
+            *) run_module "$cmd" "$target" "$@" ;;
         esac
         ;;
     inventory) show_inventory ;;
