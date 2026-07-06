@@ -9,7 +9,8 @@ source "$ROOT_DIR/linux/common/functions.sh"
 
 ZBX_MAJOR="6.4"
 CONFIGURE_ONLY=0
-ZBX_SERVER="${ZBX_SERVER:-172.31.254.101}"
+ZBX_PROFILE="karelia"
+ZBX_SERVER="${ZBX_SERVER:-zabbix.karelia.tech}"
 ZBX_SERVER_ACTIVE="${ZBX_SERVER_ACTIVE:-$ZBX_SERVER}"
 ZBX_HOSTNAME=""
 ZBX_HOSTNAME_ITEM="system.hostname"
@@ -28,7 +29,8 @@ Usage:
 
 Options:
   --major VERSION         Zabbix major version. Default: 6.4
-  --server IP_OR_DNS      Zabbix Server. Default: 172.31.254.101
+  --profile NAME          Profile name. Default: karelia
+  --server IP_OR_DNS      Zabbix Server. Default: zabbix.karelia.tech
   --server-active VALUE   Zabbix ServerActive. Default: same as --server
   --hostname NAME         Static Hostname. If omitted, HostnameItem is used
   --hostname-item KEY     HostnameItem. Default: system.hostname
@@ -39,10 +41,26 @@ Options:
 USAGE
 }
 
+load_profile() {
+    local profile="$1"
+    local profile_file="$ROOT_DIR/profiles/$profile/zabbix-agent2.conf"
+
+    if [[ ! -f "$profile_file" ]]; then
+        kat_warn "Profile not found: $profile_file"
+        return 0
+    fi
+
+    kat_info "Using profile: $profile"
+    # shellcheck disable=SC1090
+    source "$profile_file"
+    ZBX_SERVER_ACTIVE="${ZBX_SERVER_ACTIVE:-$ZBX_SERVER}"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --major) ZBX_MAJOR="${2:-}"; shift 2 ;;
-        --server) ZBX_SERVER="${2:-}"; ZBX_SERVER_ACTIVE="${ZBX_SERVER_ACTIVE:-${2:-}}"; shift 2 ;;
+        --profile) ZBX_PROFILE="${2:-}"; shift 2 ;;
+        --server) ZBX_SERVER="${2:-}"; ZBX_SERVER_ACTIVE="${2:-}"; shift 2 ;;
         --server-active) ZBX_SERVER_ACTIVE="${2:-}"; shift 2 ;;
         --hostname) ZBX_HOSTNAME="${2:-}"; shift 2 ;;
         --hostname-item) ZBX_HOSTNAME_ITEM="${2:-}"; shift 2 ;;
@@ -53,6 +71,8 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
     esac
 done
+
+load_profile "$ZBX_PROFILE"
 
 write_base_config() {
     kat_run mkdir -p "$ZBX_CONF_DIR"
