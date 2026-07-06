@@ -8,27 +8,30 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$ROOT_DIR/linux/common/functions.sh"
 
 ZBX_MAJOR="6.4"
+CONFIGURE_ONLY=0
 ZBX_CONF="/etc/zabbix/zabbix_agent2.conf"
 ZBX_CONF_DIR="/etc/zabbix/zabbix_agent2.d"
 KAT_CONF="$ZBX_CONF_DIR/karelia-admin-toolkit.conf"
 
 usage() {
     cat <<USAGE
-Update Zabbix Agent2
+Update or configure Zabbix Agent2
 
 Usage:
   sudo update_agent2.sh [options]
 
 Options:
-  --major VERSION  Zabbix major version. Default: 6.4
-  --dry-run        Show actions without changing system
-  -h, --help       Show help
+  --major VERSION    Zabbix major version. Default: 6.4
+  --configure-only   Only install Karelia UserParameters and restart agent
+  --dry-run          Show actions without changing system
+  -h, --help         Show help
 USAGE
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --major) ZBX_MAJOR="${2:-}"; shift 2 ;;
+        --configure-only) CONFIGURE_ONLY=1; shift ;;
         --dry-run) KAT_DRY_RUN=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
@@ -114,20 +117,7 @@ install_repo_package() {
     esac
 }
 
-main() {
-    kat_need_root
-    kat_init_dirs
-
-    kat_info "Karelia Admin Toolkit: Zabbix Agent2 updater"
-    kat_info "Target Zabbix major: $ZBX_MAJOR"
-
-    kat_backup_path "$ZBX_CONF"
-    kat_backup_path "$ZBX_CONF_DIR"
-
-    install_repo_package
-    write_userparameters
-    ensure_include
-
+restart_and_test() {
     kat_run systemctl enable zabbix-agent2
     kat_run systemctl restart zabbix-agent2
 
@@ -135,6 +125,27 @@ main() {
         zabbix_agent2 -t service.zabbix_agent2.status || true
         zabbix_agent2 -t copyfail.kernel.running || true
     fi
+}
+
+main() {
+    kat_need_root
+    kat_init_dirs
+
+    kat_info "Karelia Admin Toolkit: Zabbix Agent2"
+    kat_info "Target Zabbix major: $ZBX_MAJOR"
+
+    kat_backup_path "$ZBX_CONF"
+    kat_backup_path "$ZBX_CONF_DIR"
+
+    if [[ "$CONFIGURE_ONLY" != "1" ]]; then
+        install_repo_package
+    else
+        kat_info "Configure-only mode: package update skipped"
+    fi
+
+    write_userparameters
+    ensure_include
+    restart_and_test
 
     kat_info "Done"
 }
