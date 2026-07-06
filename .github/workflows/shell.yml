@@ -1,0 +1,22 @@
+name: Shell validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Bash syntax
+        run: bash tests/smoke.sh
+
+      - name: ShellCheck
+        run: shellcheck install.sh bin/kat linux/common/functions.sh linux/zabbix/update_agent2.sh tests/smoke.sh
