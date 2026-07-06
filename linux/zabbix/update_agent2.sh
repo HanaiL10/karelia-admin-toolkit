@@ -70,15 +70,7 @@ ensure_include() {
     fi
 }
 
-install_repo_package() {
-    kat_detect_os
-    kat_info "Detected: $KAT_OS_ID $KAT_OS_VERSION_ID $KAT_OS_CODENAME $KAT_ARCH"
-
-    case "$KAT_OS_ID" in
-        debian|ubuntu) ;;
-        *) kat_die "Unsupported OS: $KAT_OS_ID" ;;
-    esac
-
+install_deb_package() {
     kat_need_command apt-get
 
     if ! command -v curl >/dev/null 2>&1; then
@@ -88,6 +80,38 @@ install_repo_package() {
 
     kat_run apt-get update
     kat_run apt-get install -y zabbix-agent2
+}
+
+install_rpm_package() {
+    local pm=""
+
+    if command -v dnf >/dev/null 2>&1; then
+        pm="dnf"
+    elif command -v yum >/dev/null 2>&1; then
+        pm="yum"
+    else
+        kat_die "Neither dnf nor yum found"
+    fi
+
+    kat_info "Package manager: $pm"
+    kat_run "$pm" install -y zabbix-agent2
+}
+
+install_repo_package() {
+    kat_detect_os
+    kat_info "Detected: $KAT_OS_ID $KAT_OS_VERSION_ID $KAT_OS_CODENAME $KAT_ARCH"
+
+    case "$KAT_OS_ID" in
+        debian|ubuntu)
+            install_deb_package
+            ;;
+        rocky|rhel|centos|almalinux|ol)
+            install_rpm_package
+            ;;
+        *)
+            kat_die "Unsupported OS: $KAT_OS_ID"
+            ;;
+    esac
 }
 
 main() {
